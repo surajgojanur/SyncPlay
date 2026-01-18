@@ -20,3 +20,4 @@ SyncPlay-LAN is a Windows-first Java desktop application that allows a user to p
 
 ## License
 MIT
+# SyncPlay
