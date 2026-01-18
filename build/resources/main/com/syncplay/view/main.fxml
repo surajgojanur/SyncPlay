@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.geometry.Insets?>
+
+<VBox xmlns="http://javafx.com/javafx"
+      xmlns:fx="http://javafx.com/fxml"
+      fx:controller="com.syncplay.ui.MainController"
+      spacing="10" alignment="CENTER">
+      
+    <padding><Insets top="20" right="20" bottom="20" left="20"/></padding>
+
+    <Label fx:id="statusLabel" text="Initializing..." style="-fx-font-size: 16px;"/>
+    
+    <HBox spacing="10" alignment="CENTER">
+        <Button fx:id="loadButton" text="Load Video" onAction="#onLoadClicked"/>
+        <Button fx:id="playButton" text="Play" onAction="#onPlayClicked"/>
+    </HBox>
+    
+    <!-- Video placeholder -->
+    <StackPane fx:id="videoContainer" prefWidth="640" prefHeight="360" style="-fx-background-color: black;">
+        <Label text="Video Preview" textFill="white"/>
+    </StackPane>
+
+</VBox>

@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SyncPlay Client</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            background: #222;
+            color: white;
+            margin: 0;
+        }
+
+        button {
+            padding: 15px 30px;
+            font-size: 1.2rem;
+            cursor: pointer;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+
+        #status {
+            margin-top: 20px;
+            color: #aaa;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>SyncPlay</h1>
+    <button id="joinBtn">Click to Join Audio</button>
+    <div id="status">Disconnected</div>
+
+    <div style="margin-top: 20px; width: 80%; max-width: 400px;">
+        <label for="delaySlider">Audio Delay Adjustment (ms)</label>
+        <input type="range" id="delaySlider" min="-500" max="500" value="0" step="50" style="width: 100%;">
+        <div id="delayValue" style="text-align: center;">0 ms</div>
+    </div>
+
+    <script>
+        const btn = document.getElementById('joinBtn');
+        const status = document.getElementById('status');
+        const slider = document.getElementById('delaySlider');
+        const delayVal = document.getElementById('delayValue');
+
+        let wsCommand;
+        let wsAudio;
+        let audioCtx;
+        let nextStartTime = 0;
+        let initialDelay = 0.1; // 100ms jitter buffer
+
+        // Manual offset in seconds
+        let manualOffset = 0;
+
+        slider.addEventListener('input', (e) => {
+            manualOffset = parseInt(e.target.value) / 1000.0;
+            delayVal.innerText = `${e.target.value} ms`;
+        });
+
+        function connect() {
+            // Main Control WS
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            wsCommand = new WebSocket(`${protocol}//${window.location.host}/ws`);
+
+            wsCommand.onopen = () => {
+                status.innerText = 'Connected (Command)';
+                btn.style.display = 'none';
+
+                // Initialize Audio Context on user gesture
+                initAudio();
+            };
+
+            wsCommand.onclose = () => {
+                status.innerText = 'Disconnected';
+                btn.style.display = 'block';
+                btn.innerText = 'Reconnect';
+                if (wsAudio) wsAudio.close();
+            };
+        }
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)({
+                    sampleRate: 44100, // Ensure match with server
+                    latencyHint: 'interactive'
+                });
+            }
+
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+
+            connectAudioWS();
+        }
+
+        function connectAudioWS() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            wsAudio = new WebSocket(`${protocol}//${window.location.host}/audio`);
+            wsAudio.binaryType = 'arraybuffer';
+
+            wsAudio.onopen = () => {
+                console.log("Audio WS Connected");
+            };
+
+            wsAudio.onmessage = (event) => {
+                if (event.data instanceof ArrayBuffer) {
+                    queueAudio(event.data);
+                }
+            };
+
+            wsAudio.onclose = () => {
+                console.log("Audio WS Closed");
+            };
+        }
+
+        function queueAudio(arrayBuffer) {
+            // raw S16LE stereo 44100
+            const int16 = new Int16Array(arrayBuffer);
+            const float32 = new Float32Array(int16.length);
+
+            // Convert S16 to Float32
+            for (let i = 0; i < int16.length; i++) {
+                float32[i] = int16[i] / 32768.0;
+            }
+
+            // Deinterleave
+            const channels = 2;
+            const frameCount = float32.length / channels;
+            const buffer = audioCtx.createBuffer(channels, frameCount, 44100);
+
+            const ch0 = buffer.getChannelData(0);
+            const ch1 = buffer.getChannelData(1);
+
+            for (let i = 0; i < frameCount; i++) {
+                ch0[i] = float32[i * 2];
+                ch1[i] = float32[i * 2 + 1];
+            }
+
+            // Schedule playback
+            const bufSrc = audioCtx.createBufferSource();
+            bufSrc.buffer = buffer;
+            bufSrc.connect(audioCtx.destination);
+
+            const now = audioCtx.currentTime;
+            // Handle drift/buffer underrun
+            if (nextStartTime < now) {
+                nextStartTime = now + initialDelay;
+            }
+
+            bufSrc.start(nextStartTime);
+            nextStartTime += buffer.duration;
+        }
+
+        btn.addEventListener('click', () => {
+            if (!wsCommand || wsCommand.readyState === WebSocket.CLOSED) {
+                connect();
+            }
+        });
+
+    </script>
+</body>
+
+</html>

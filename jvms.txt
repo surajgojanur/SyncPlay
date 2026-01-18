@@ -1,0 +1,8 @@
+java@
+java-25@
+java-25-openjdk/
+java-openjdk@
+jre@
+jre-25@
+jre-25-openjdk@
+jre-openjdk@
